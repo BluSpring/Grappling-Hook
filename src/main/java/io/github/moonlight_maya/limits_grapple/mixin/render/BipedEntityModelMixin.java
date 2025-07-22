@@ -10,10 +10,9 @@ import net.minecraft.client.render.entity.model.ModelWithArms;
 import net.minecraft.client.render.entity.model.ModelWithHead;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.Arm;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.Vec3f;
+import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -52,12 +51,12 @@ public abstract class BipedEntityModelMixin<T extends LivingEntity> extends Anim
 		ItemStack rightHandStack = livingEntity.getMainArm() == Arm.RIGHT ? livingEntity.getMainHandStack() : livingEntity.getOffHandStack();
 		ItemStack leftHandStack = livingEntity.getMainArm() == Arm.LEFT ? livingEntity.getMainHandStack() : livingEntity.getOffHandStack();
 		if (rightHandStack.isOf(GrappleMod.GRAPPLE_ITEM)) {
-			if (rightHandStack.getOrCreateNbt().getBoolean("Active")) {
+			if (rightHandStack.contains(GrappleMod.ACTIVE)) {
 				rightArmPose = BipedEntityModel.ArmPose.SPYGLASS;
 			}
 		}
 		if (leftHandStack.isOf(GrappleMod.GRAPPLE_ITEM)) {
-			if (leftHandStack.getOrCreateNbt().getBoolean("Active")) {
+			if (leftHandStack.contains(GrappleMod.ACTIVE)) {
 				leftArmPose = BipedEntityModel.ArmPose.SPYGLASS;
 			}
 		}
@@ -75,13 +74,12 @@ public abstract class BipedEntityModelMixin<T extends LivingEntity> extends Anim
 			ModelPart armPart = left ? leftArm : rightArm;
 			ItemStack itemStack = playerEntity.getMainArm() == arm ? playerEntity.getMainHandStack() : playerEntity.getOffHandStack();
 			if (itemStack.isOf(GrappleMod.GRAPPLE_ITEM)) {
-				NbtCompound tag = itemStack.getOrCreateNbt();
-				if (tag.getBoolean("Active")) {
-					Vec3d anchor = new Vec3d(tag.getDouble("X"), tag.getDouble("Y"), tag.getDouble("Z"));
-					Vec3f transformedAnchor = RenderingUtils.getTransformedAnchorThirdPerson(playerEntity, anchor, left);
+				if (itemStack.contains(GrappleMod.ACTIVE) && itemStack.contains(GrappleMod.ANCHOR)) {
+					Vec3d anchor = itemStack.get(GrappleMod.ANCHOR);
+					Vector3f transformedAnchor = RenderingUtils.getTransformedAnchorThirdPerson(playerEntity, anchor, left);
 					transformedAnchor.normalize();
-					armPart.yaw = (float) (Math.atan2(transformedAnchor.getZ(), transformedAnchor.getX()) - Math.PI / 2);
-					armPart.pitch = (float) (-Math.asin(transformedAnchor.getY()) - Math.PI / 2);
+					armPart.yaw = (float) (Math.atan2(transformedAnchor.z(), transformedAnchor.x()) - Math.PI / 2);
+					armPart.pitch = (float) (-Math.asin(transformedAnchor.y()) - Math.PI / 2);
 				} else {
 					armPart.yaw = head.yaw;
 					armPart.pitch = head.pitch - 1.5f;

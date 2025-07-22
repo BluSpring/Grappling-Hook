@@ -1,6 +1,7 @@
 package io.github.moonlight_maya.limits_grapple;
 
 import io.github.moonlight_maya.limits_grapple.item.GrappleItem;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
@@ -9,18 +10,21 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.math.*;
-import org.quiltmc.loader.api.QuiltLoader;
-import virtuoel.pehkui.util.ScaleUtils;
+import org.joml.Matrix3f;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 public class RenderingUtils {
-	public static Vec3f getTransformedAnchorThirdPerson(AbstractClientPlayerEntity playerEntity, Vec3d anchor, boolean left) {
-		float tickDelta = MinecraftClient.getInstance().getTickDelta();
+	public static Vector3f getTransformedAnchorThirdPerson(AbstractClientPlayerEntity playerEntity, Vec3d anchor, boolean left) {
+		float tickDelta = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(true);
 		anchor = anchor.subtract(playerEntity.getLerpedPos(tickDelta));
-		Vec3f transformedAnchor = new Vec3f(anchor);
+		Vector3f transformedAnchor = anchor.toVector3f();
 		float entityYaw = getTheH(playerEntity);
-		transformedAnchor.transform(new Matrix3f(Vec3f.POSITIVE_Y.getDegreesQuaternion(entityYaw)));
+		transformedAnchor.mulTranspose(RotationAxis.POSITIVE_Y.rotationDegrees(entityYaw).get(new Matrix3f()));
 		float leaningPitch = playerEntity.getLeaningPitch(tickDelta);
 
 		//Get pehkui scale
@@ -29,11 +33,11 @@ public class RenderingUtils {
 		//Check PlayerEntityRenderer.setupTransforms() for how these if statement blocks were made
 		if (playerEntity.isFallFlying()) {
 
-			float j = (float) playerEntity.getRoll() + tickDelta;
+			float j = (float) playerEntity.getRotationVector().z + tickDelta;
 			float k = MathHelper.clamp(j * j / 100.0F, 0.0F, 1.0F);
 			if (!playerEntity.isUsingRiptide()) {
-				Quaternion quat = Vec3f.POSITIVE_X.getDegreesQuaternion(k * (-90.0F - playerEntity.getPitch()));
-				transformedAnchor.transform(new Matrix3f(quat));
+				Quaternionf quat = RotationAxis.POSITIVE_X.rotationDegrees(k * (-90.0F - playerEntity.getPitch()));
+				transformedAnchor.mulTranspose(quat.get(new Matrix3f()));
 			}
 
 			Vec3d vec3d = playerEntity.getRotationVec(tickDelta);
@@ -45,29 +49,29 @@ public class RenderingUtils {
 				double l = (vec3d2.x * vec3d.x + vec3d2.z * vec3d.z) / Math.sqrt(d * e);
 				double m = vec3d2.x * vec3d.z - vec3d2.z * vec3d.x;
 				float rad = (float)(Math.signum(m) * Math.acos(l));
-				Quaternion quat = Vec3f.NEGATIVE_Y.getRadialQuaternion(rad);
-				transformedAnchor.transform(new Matrix3f(quat));
+				Quaternionf quat = RotationAxis.NEGATIVE_Y.rotation(rad);
+				transformedAnchor.mulTranspose(quat.get(new Matrix3f()));
 			}
 
 		} else if (leaningPitch > 0) {
 			float pitchMod = playerEntity.isTouchingWater() ? playerEntity.getPitch(tickDelta) : 0;
-			Quaternion quat = Vec3f.NEGATIVE_X.getDegreesQuaternion(leaningPitch * (90 + pitchMod));
-			transformedAnchor.transform(new Matrix3f(quat));
+			Quaternionf quat = RotationAxis.NEGATIVE_X.rotationDegrees(leaningPitch * (90 + pitchMod));
+			transformedAnchor.mulTranspose(quat.get(new Matrix3f()));
 			if (playerEntity.isInSwimmingPose())
 				transformedAnchor.add(0, 0.875f, -0.3f*0.875f);
 		}
 
 		//transformedAnchor is now in player space.
 		float scalar = 0.875f/16f * sizeMul;
-		Vec3f playerSpacePivot = new Vec3f((left ? 5 : -5)*scalar, (playerEntity.isInSneakingPose() ? 18.8f : 22) * scalar, 0);
-		transformedAnchor.subtract(playerSpacePivot); //TransformedAnchor is now relative to the player space pivot.
+		Vector3f playerSpacePivot = new Vector3f((left ? 5 : -5)*scalar, (playerEntity.isInSneakingPose() ? 18.8f : 22) * scalar, 0);
+		transformedAnchor.sub(playerSpacePivot); //TransformedAnchor is now relative to the player space pivot.
 		return transformedAnchor;
 	}
 
 	//If your height modifier is different from width then the entire rendering is fucked anyway sooooo
 	//Not even going to try to deal with that, just going to have it assume height mod == width mod
 	public static float getSizeMultiplier(AbstractClientPlayerEntity playerEntity, float tickDelta) {
-		return QuiltLoader.isModLoaded("pehkui") ? ScaleUtils.getModelHeightScale(playerEntity, tickDelta) : 1;
+		return (float) playerEntity.getAttributeValue(EntityAttributes.GENERIC_SCALE);
 	}
 
 
@@ -75,7 +79,7 @@ public class RenderingUtils {
 	//get that H!
 	//local variable from LivingEntityRenderer$render()
 	private static float getTheH(LivingEntity livingEntity) {
-		float g = MinecraftClient.getInstance().getTickDelta();
+		float g = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(true);
 		float h = MathHelper.lerpAngleDegrees(g, livingEntity.prevBodyYaw, livingEntity.bodyYaw);
 		float j = MathHelper.lerpAngleDegrees(g, livingEntity.prevHeadYaw, livingEntity.headYaw);
 		float k;
@@ -98,13 +102,13 @@ public class RenderingUtils {
 		return h;
 	}
 
-	public static Vec3f transformWorldToView(Vec3d worldPos) {
+	public static Vector3f transformWorldToView(Vec3d worldPos) {
 		MinecraftClient client = MinecraftClient.getInstance();
 		Camera camera = client.gameRenderer.getCamera();
-		Matrix3f cameraMat = new Matrix3f(camera.getRotation());
+		Matrix3f cameraMat = camera.getRotation().get(new Matrix3f());
 		cameraMat.invert();
-		Vec3f result = new Vec3f(worldPos.subtract(camera.getPos()));
-		result.transform(cameraMat);
+		Vector3f result = worldPos.subtract(camera.getPos()).toVector3f();
+		result.mulTranspose(cameraMat);
 		return result;
 	}
 
@@ -133,11 +137,11 @@ public class RenderingUtils {
 	public static void renderChainsFancy(ItemStack stack, double distance, MatrixStack matrices, VertexConsumerProvider vcp, int light, int overlay) {
 		matrices.translate(0, 1, 0);
 		AbstractClientPlayerEntity cpe = GrappleModClient.currentRenderedPlayerEntity;
-		float tickDelta = MinecraftClient.getInstance().getTickDelta();
+		float tickDelta = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(true);
 
-		double fireSpeed = GrappleItem.FIRE_SPEED_BASE + GrappleItem.FIRE_SPEED_PER_LEVEL * EnchantmentHelper.getLevel(GrappleMod.RANGE_ENCHANTMENT, stack);
+		double fireSpeed = GrappleItem.FIRE_SPEED_BASE + GrappleItem.FIRE_SPEED_PER_LEVEL * EnchantmentHelper.getLevel(cpe.getRegistryManager().get(RegistryKeys.ENCHANTMENT).getEntry(GrappleMod.RANGE_ENCHANTMENT).orElseThrow(), stack);
 
-		double rand = ((cpe.world.getTime() - cpe.getItemUseTime()) * 68239	% Math.PI) * 2 / Math.PI - 1; //Randomish yet consistent value from -1 to 1, chosen at the time of the item use
+		double rand = ((cpe.getWorld().getTime() - cpe.getItemUseTime()) * 68239	% Math.PI) * 2 / Math.PI - 1; //Randomish yet consistent value from -1 to 1, chosen at the time of the item use
 
 		double ticksElapsed = cpe.getItemUseTime() + tickDelta;
 		double ticksToPullBack = Math.min(distance / 15, 3);
@@ -163,7 +167,7 @@ public class RenderingUtils {
 			zFreq += (1 - f);
 		}
 
-		Vec3f cur = new Vec3f(), prev = new Vec3f();
+		Vector3f cur = new Vector3f(), prev = new Vector3f();
 
 		for (double t = dt; t < maxT; t += dt) {
 			//Calculate next x, z
@@ -176,25 +180,25 @@ public class RenderingUtils {
 			cur.set((float) x, (float) y, (float) z);
 
 			//Calculate difference, update prev
-			Vec3f diff = cur.copy();
-			diff.subtract(prev);
+			Vector3f diff = new Vector3f(cur);
+			diff.sub(prev);
 			prev.set(cur);
 
 			if (y < 0.5)
 				continue;
 
 			//Transform and render chain according to diff
-			float len = MathHelper.fastInverseSqrt(diff.dot(diff));
-			diff.scale(len);
+			float len = MathHelper.inverseSqrt(diff.dot(diff));
+			diff.mul(len);
 			len = 1 / len;
 
-			float pitch = (float) Math.asin(diff.getZ());
-			float yaw = (float) Math.atan2(diff.getY(), diff.getX())-MathHelper.PI/2;
+			float pitch = (float) Math.asin(diff.z());
+			float yaw = (float) Math.atan2(diff.y(), diff.x())-MathHelper.PI/2;
 
 			matrices.push();
 			matrices.translate(x, (t - dt) * -distance, z);
-			matrices.multiply(Vec3f.POSITIVE_X.getRadialQuaternion(pitch));
-			matrices.multiply(Vec3f.POSITIVE_Z.getRadialQuaternion(yaw));
+			matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(pitch));
+			matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(yaw));
 			matrices.scale(1, len, 1);
 			matrices.translate(0, -1, 0);
 			MinecraftClient.getInstance().getBlockRenderManager().renderBlockAsEntity(Blocks.CHAIN.getDefaultState(), matrices, vcp, light, overlay);

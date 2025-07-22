@@ -1,0 +1,20 @@
+{
+  "description": {
+    "translate": "enchantment.limits_grapple.range"
+  },
+  "supported_items": "limits_grapple:grappling_hook",
+  "weight": 1,
+  "max_level": 5,
+  "min_cost": {
+    "base": -1,
+    "per_level_above_first": 9
+  },
+  "max_cost": {
+    "base": 999,
+    "per_level_above_first": 0
+  },
+  "anvil_cost": 0,
+  "slots": [
+    "mainhand"
+  ]
+}

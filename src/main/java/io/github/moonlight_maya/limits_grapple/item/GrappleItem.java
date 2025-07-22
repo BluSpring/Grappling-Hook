@@ -5,6 +5,7 @@ import io.github.moonlight_maya.limits_grapple.ServerPlayerVelocityHelper;
 import net.fabricmc.fabric.api.item.v1.FabricItem;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
@@ -12,11 +13,14 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemUsage;
 import net.minecraft.item.ToolMaterials;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Hand;
 import net.minecraft.util.TypedActionResult;
+import net.minecraft.util.Unit;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Vec3d;
@@ -24,32 +28,31 @@ import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
 public class GrappleItem extends Item implements FabricItem {
-	public GrappleItem(Settings settings) {
+	public GrappleItem(Item.Settings settings) {
 		super(settings);
 	}
 
 	@Override
-	public int getMaxUseTime(ItemStack stack) {
+	public int getMaxUseTime(ItemStack stack, LivingEntity user) {
 		return 10_000_000;
 	}
 
 	@Override
 	public void usageTick(World world, LivingEntity user, ItemStack stack, int remainingUseTicks) {
-		NbtCompound tag = stack.getOrCreateNbt();
 		//If the item is not active, or we missed the shot, then do not affect the player.
-		if (!tag.getBoolean("Active") || !tag.getBoolean("Hit"))
+		if (!stack.contains(GrappleMod.ACTIVE) || !stack.contains(GrappleMod.HIT) || !stack.contains(GrappleMod.ANCHOR))
 			return;
 
-		int ticksElapsed = getMaxUseTime(stack) - remainingUseTicks;
+		int ticksElapsed = getMaxUseTime(stack, user) - remainingUseTicks;
 		if (!world.isClient && ticksElapsed == 8) { //Only decay durability after fired for 8 ticks
 			final Hand useHand = user.getStackInHand(Hand.MAIN_HAND) == stack ? Hand.MAIN_HAND : Hand.OFF_HAND;
-			stack.damage(1, user, p -> p.sendToolBreakStatus(useHand));
+			stack.damage(1, user, useHand == Hand.MAIN_HAND ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND);
 		}
 		if (world.isClient && user instanceof ClientPlayerEntity cpe)
 			affectClientPlayer(cpe, stack, ticksElapsed);
 
 		//Decide if we want to break the grapple
-		Vec3d diff = new Vec3d(tag.getDouble("X"), tag.getDouble("Y"), tag.getDouble("Z")).subtract(user.getEyePos());
+		Vec3d diff = stack.get(GrappleMod.ANCHOR).subtract(user.getEyePos());
 		double dotProd = diff.normalize().dotProduct(user.getRotationVector());
 		if (dotProd < -0.4)
 			disconnectGrapple(user, stack);
@@ -123,14 +126,14 @@ public class GrappleItem extends Item implements FabricItem {
 
 	public static BlockHitResult raycast(PlayerEntity user, ItemStack grappleItem) {
 		//Get raycast range
-		double range = RANGE_BASE + RANGE_PER_LEVEL * EnchantmentHelper.getLevel(GrappleMod.RANGE_ENCHANTMENT, grappleItem);
+		double range = RANGE_BASE + RANGE_PER_LEVEL * EnchantmentHelper.getLevel(user.getRegistryManager().get(RegistryKeys.ENCHANTMENT).getEntry(GrappleMod.RANGE_ENCHANTMENT).orElseThrow(), grappleItem);
 		range = Math.min(range, 108); //cap it at the max value, so /give'd grapples don't try to raycast absurd distance.
 
 		//Perform raycast
 		Vec3d startVec = user.getEyePos();
 		Vec3d diffVec = user.getRotationVector().multiply(range);
 		Vec3d endVec = startVec.add(diffVec);
-		return user.world.raycast(new RaycastContext(startVec, endVec, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, user));
+		return user.getWorld().raycast(new RaycastContext(startVec, endVec, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, user));
 	}
 
 	public static final double RANGE_BASE = 48.0;
@@ -153,14 +156,12 @@ public class GrappleItem extends Item implements FabricItem {
 
 
 	private static void affectClientPlayer(ClientPlayerEntity clientPlayerEntity, ItemStack stack, int ticksElapsed) {
-		NbtCompound stackTag = stack.getOrCreateNbt();
-
 		//Get some useful vectors:
-		Vec3d anchorPoint = new Vec3d(stackTag.getDouble("X"), stackTag.getDouble("Y"), stackTag.getDouble("Z"));
+		Vec3d anchorPoint = stack.get(GrappleMod.ANCHOR);
 		Vec3d playerPos = clientPlayerEntity.getEyePos();
 
 		//Determine if the grapple has been launched far enough yet to hit the endpoint and start pulling.
-		double fireSpeed = FIRE_SPEED_BASE + FIRE_SPEED_PER_LEVEL * EnchantmentHelper.getLevel(GrappleMod.RANGE_ENCHANTMENT, stack);
+		double fireSpeed = FIRE_SPEED_BASE + FIRE_SPEED_PER_LEVEL * EnchantmentHelper.getLevel(clientPlayerEntity.getRegistryManager().get(RegistryKeys.ENCHANTMENT).getEntry(GrappleMod.RANGE_ENCHANTMENT).orElseThrow(), stack);
 		ticksElapsed -= playerPos.distanceTo(anchorPoint) / fireSpeed - 1;
 		if (ticksElapsed <= 0)
 			return;
@@ -174,7 +175,7 @@ public class GrappleItem extends Item implements FabricItem {
 		Vec3d rightVec = new Vec3d(Math.cos(yaw), 0, Math.sin(yaw));
 
 		//Strength of the pull force
-		int enchLevel = EnchantmentHelper.getLevel(GrappleMod.ACCELERATION_ENCHANTMENT, stack);
+		int enchLevel = EnchantmentHelper.getLevel(clientPlayerEntity.getRegistryManager().get(RegistryKeys.ENCHANTMENT).getEntry(GrappleMod.ACCELERATION_ENCHANTMENT).orElseThrow(), stack);
 		double accel = ACCEL_BASE + ACCEL_PER_LEVEL * enchLevel;
 		double jerk = JERK_BASE + JERK_PER_LEVEL * enchLevel;
 		double pullForce = accel + jerk * ticksElapsed;
@@ -184,11 +185,11 @@ public class GrappleItem extends Item implements FabricItem {
 		//Get velocity, add each component, scaled in the proper ways.
 		Vec3d vel = clientPlayerEntity.getVelocity()
 				.add(pullVector.multiply(pullForce))
-				.add(lookVec.multiply(lookComponent + inputComponent * clientPlayerEntity.input.forwardMovement))
-				.add(rightVec.multiply(inputComponent * clientPlayerEntity.input.sidewaysMovement));
+				.add(lookVec.multiply(lookComponent + inputComponent * clientPlayerEntity.input.movementForward))
+				.add(rightVec.multiply(inputComponent * clientPlayerEntity.input.movementSideways));
 
 		//Clamp velocity to MAX_SPEED
-		double maxSpeed = MAX_SPEED_BASE + MAX_SPEED_PER_LEVEL * EnchantmentHelper.getLevel(GrappleMod.MAX_SPEED_ENCHANTMENT, stack);
+		double maxSpeed = MAX_SPEED_BASE + MAX_SPEED_PER_LEVEL * EnchantmentHelper.getLevel(clientPlayerEntity.getRegistryManager().get(RegistryKeys.ENCHANTMENT).getEntry(GrappleMod.MAX_SPEED_ENCHANTMENT).orElseThrow(), stack);
 		double clamped = Math.min(vel.length(), maxSpeed);
 		vel = vel.normalize().multiply(clamped);
 		clientPlayerEntity.setVelocity(vel);
@@ -203,18 +204,15 @@ public class GrappleItem extends Item implements FabricItem {
 		entity.playSound(SoundEvents.ITEM_CROSSBOW_SHOOT, 1.0f, 0.9f);
 		entity.playSound(SoundEvents.ITEM_CROSSBOW_SHOOT, 1.0f, 1.2f);
 
-		NbtCompound tag = stack.getOrCreateNbt();
-		tag.putDouble("X", endPoint.x);
-		tag.putDouble("Y", endPoint.y);
-		tag.putDouble("Z", endPoint.z);
-		tag.putBoolean("Active", true);
-		tag.putBoolean("Hit", hit);
+		stack.set(GrappleMod.ANCHOR, endPoint);
+		stack.set(GrappleMod.ACTIVE, Unit.INSTANCE);
+		if (hit)
+			stack.set(GrappleMod.HIT, Unit.INSTANCE);
 	}
 
 	private static void disconnectGrapple(LivingEntity entity, ItemStack stack) {
 		entity.playSound(SoundEvents.BLOCK_BARREL_CLOSE, 1.0f, 2f);
 
-		NbtCompound tag = stack.getOrCreateNbt();
-		tag.putBoolean("Active", false);
+		stack.remove(GrappleMod.ACTIVE);
 	}
 }

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "limits_grapple",
+  "version": "${version}",
+  "name": "Limits' Grapple",
+  "description": "A small grappling hook mod, made for ModFest: Singularity!",
+  "authors": [
+    "Limit System",
+    "BluSpring"
+  ],
+  "contact": {
+    "sources": "https://github.com/BluSpring/Grappling-Hook",
+    "issues": "https://github.com/BluSpring/Grappling-Hook/issues"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "io.github.moonlight_maya.limits_grapple.GrappleMod"
+    ],
+    "client": [
+      "io.github.moonlight_maya.limits_grapple.GrappleModClient"
+    ]
+  },
+  "mixins": [
+    "limits_grapple.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "minecraft": ">=1.21.1",
+    "fabric-api": "*"
+  }
+}
