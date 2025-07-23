@@ -54,8 +54,8 @@ public class GrappleItem extends Item implements FabricItem {
 		//Decide if we want to break the grapple
 		Vec3d diff = stack.get(GrappleMod.ANCHOR).subtract(user.getEyePos());
 		double dotProd = diff.normalize().dotProduct(user.getRotationVector());
-		if (dotProd < -0.4)
-			disconnectGrapple(user, stack);
+		//if (dotProd < -0.4)
+		//	disconnectGrapple(user, stack);
 	}
 
 	@Override

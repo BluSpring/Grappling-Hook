@@ -30,24 +30,25 @@ public class GrappleModClient implements ClientModInitializer {
 		Vec3d anchor = item.get(GrappleMod.ANCHOR);
 		Vector3f transformedAnchor = RenderingUtils.transformWorldToView(anchor);
 
+
 		//Stolen from applyEquipmentOffset
+
 		int i = leftHand ? -1 : 1;
-		Vector3f diff = new Vector3f(i * 0.56F, -0.52F + equipProgress * -0.6F, -0.7200000286102295f);
-		Vector3f diffScaled = new Vector3f(diff);
+		Vector3f handOffset = new Vector3f(i * 0.56F, -0.52F + equipProgress * -0.6F, -0.72f);
+		Vector3f scaledHandOffset = new Vector3f(handOffset);
 		float scaleFactor = RenderingUtils.getSizeMultiplier(player, tickDelta);
-		diffScaled.mul(scaleFactor, -scaleFactor, scaleFactor);
-		transformedAnchor.add(diffScaled);
+		scaledHandOffset.mul(scaleFactor, -scaleFactor, scaleFactor);
+		transformedAnchor.add(scaledHandOffset);
 
 		transformedAnchor.normalize();
 		float pitchOffset = (float) (Math.asin(transformedAnchor.y()));
 		float yawOffset = (float) (Math.atan2(transformedAnchor.x(), transformedAnchor.z()));
 
-
-//		matrices.scale(scaleFactor, scaleFactor, scaleFactor);
+		matrices.scale(scaleFactor, scaleFactor, scaleFactor);
 		//Following translation is to move the item from the center of the screen
 		//to the left or right side, depending on the hand holding it. This part
 		//does not need to take the scale into account.
-		matrices.translate(diff.x(), diff.y(), diff.z());
+		matrices.translate(handOffset.x(), handOffset.y(), handOffset.z());
 		matrices.translate(i*-1.0/16, 3.0/16, 0);
 		matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yawOffset));
 		matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180f));
