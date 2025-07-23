@@ -7,6 +7,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.LivingEntity;
@@ -24,7 +25,7 @@ public class RenderingUtils {
 		anchor = anchor.subtract(playerEntity.getLerpedPos(tickDelta));
 		Vector3f transformedAnchor = anchor.toVector3f();
 		float entityYaw = getTheH(playerEntity);
-		transformedAnchor.mulTranspose(RotationAxis.POSITIVE_Y.rotationDegrees(entityYaw).get(new Matrix3f()));
+		transformedAnchor.mulTranspose(RotationAxis.NEGATIVE_Y.rotationDegrees(entityYaw).get(new Matrix3f()));
 		float leaningPitch = playerEntity.getLeaningPitch(tickDelta);
 
 		//Get pehkui scale
@@ -32,30 +33,29 @@ public class RenderingUtils {
 
 		//Check PlayerEntityRenderer.setupTransforms() for how these if statement blocks were made
 		if (playerEntity.isFallFlying()) {
-
-			float j = (float) playerEntity.getRotationVector().z + tickDelta;
+			float j = (float) playerEntity.getFallFlyingTicks() + tickDelta;
 			float k = MathHelper.clamp(j * j / 100.0F, 0.0F, 1.0F);
 			if (!playerEntity.isUsingRiptide()) {
-				Quaternionf quat = RotationAxis.POSITIVE_X.rotationDegrees(k * (-90.0F - playerEntity.getPitch()));
+				Quaternionf quat = RotationAxis.NEGATIVE_X.rotationDegrees(k * (-90.0F - playerEntity.getPitch(tickDelta)));
 				transformedAnchor.mulTranspose(quat.get(new Matrix3f()));
 			}
 
-			Vec3d vec3d = playerEntity.getRotationVec(tickDelta);
-			Vec3d vec3d2 = playerEntity.getVelocity();
-			double d = vec3d2.horizontalLengthSquared();
-			double e = vec3d.horizontalLengthSquared();
+			Vec3d playerRotationVector = playerEntity.getRotationVec(tickDelta);
+			Vec3d playerVelocity = playerEntity.lerpVelocity(tickDelta);
+			double velocitySqrLen = playerVelocity.horizontalLengthSquared();
+			double rotVectorSqrLen = playerRotationVector.horizontalLengthSquared();
 
-			if (d > 0.0 && e > 0.0) {
-				double l = (vec3d2.x * vec3d.x + vec3d2.z * vec3d.z) / Math.sqrt(d * e);
-				double m = vec3d2.x * vec3d.z - vec3d2.z * vec3d.x;
+			if (velocitySqrLen > 0.0 && rotVectorSqrLen > 0.0) {
+				double l = (playerVelocity.x * playerRotationVector.x + playerVelocity.z * playerRotationVector.z) / Math.sqrt(velocitySqrLen * rotVectorSqrLen);
+				double m = playerVelocity.x * playerRotationVector.z - playerVelocity.z * playerRotationVector.x;
 				float rad = (float)(Math.signum(m) * Math.acos(l));
-				Quaternionf quat = RotationAxis.NEGATIVE_Y.rotation(rad);
+				Quaternionf quat = RotationAxis.POSITIVE_Y.rotation(rad);
 				transformedAnchor.mulTranspose(quat.get(new Matrix3f()));
 			}
 
 		} else if (leaningPitch > 0) {
 			float pitchMod = playerEntity.isTouchingWater() ? playerEntity.getPitch(tickDelta) : 0;
-			Quaternionf quat = RotationAxis.NEGATIVE_X.rotationDegrees(leaningPitch * (90 + pitchMod));
+			Quaternionf quat = RotationAxis.POSITIVE_X.rotationDegrees(leaningPitch * (90 + pitchMod));
 			transformedAnchor.mulTranspose(quat.get(new Matrix3f()));
 			if (playerEntity.isInSwimmingPose())
 				transformedAnchor.add(0, 0.875f, -0.3f*0.875f);
@@ -78,35 +78,30 @@ public class RenderingUtils {
 
 	//get that H!
 	//local variable from LivingEntityRenderer$render()
+	// It gets the yaw chat...
 	private static float getTheH(LivingEntity livingEntity) {
-		float g = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(true);
-		float h = MathHelper.lerpAngleDegrees(g, livingEntity.prevBodyYaw, livingEntity.bodyYaw);
-		float j = MathHelper.lerpAngleDegrees(g, livingEntity.prevHeadYaw, livingEntity.headYaw);
-		float k;
-		float l;
-		if (livingEntity.hasVehicle() && livingEntity.getVehicle() instanceof LivingEntity livingEntity2) {
-			h = MathHelper.lerpAngleDegrees(g, livingEntity2.prevBodyYaw, livingEntity2.bodyYaw);
-			k = j - h;
-			l = MathHelper.wrapDegrees(k);
-			if (l < -85.0F) {
-				l = -85.0F;
-			}
-			if (l >= 85.0F) {
-				l = 85.0F;
-			}
-			h = j - l;
-			if (l * l > 2500.0F) {
-				h += l * 0.2F;
+		float delta = MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(true);
+		float lerpedBodyYaw = MathHelper.lerpAngleDegrees(delta, livingEntity.prevBodyYaw, livingEntity.bodyYaw);
+		float lerpedHeadYaw = MathHelper.lerpAngleDegrees(delta, livingEntity.prevHeadYaw, livingEntity.headYaw);
+		float degrees;
+		float wrappedDegrees;
+		if (livingEntity.hasVehicle() && livingEntity.getVehicle() instanceof LivingEntity vehicleEntity) {
+			lerpedBodyYaw = MathHelper.lerpAngleDegrees(delta, vehicleEntity.prevBodyYaw, vehicleEntity.bodyYaw);
+			degrees = lerpedHeadYaw - lerpedBodyYaw;
+			wrappedDegrees = Math.clamp(MathHelper.wrapDegrees(degrees), -90f, 90f);
+			lerpedBodyYaw = lerpedHeadYaw - wrappedDegrees;
+			if (wrappedDegrees * wrappedDegrees > 2500.0F) {
+				lerpedBodyYaw += wrappedDegrees * 0.2F;
 			}
 		}
-		return h;
+		return lerpedBodyYaw;
 	}
 
 	public static Vector3f transformWorldToView(Vec3d worldPos) {
 		MinecraftClient client = MinecraftClient.getInstance();
 		Camera camera = client.gameRenderer.getCamera();
 		Matrix3f cameraMat = camera.getRotation().get(new Matrix3f());
-		cameraMat.invert();
+		//cameraMat.invert();
 		Vector3f result = worldPos.subtract(camera.getPos()).toVector3f();
 		result.mulTranspose(cameraMat);
 		return result;
