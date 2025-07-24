@@ -214,5 +214,7 @@ public class GrappleItem extends Item implements FabricItem {
 		entity.playSound(SoundEvents.BLOCK_BARREL_CLOSE, 1.0f, 2f);
 
 		stack.remove(GrappleMod.ACTIVE);
+		stack.remove(GrappleMod.ANCHOR);
+		stack.remove(GrappleMod.HIT);
 	}
 }

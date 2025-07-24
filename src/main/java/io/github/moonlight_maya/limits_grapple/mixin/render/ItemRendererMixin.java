@@ -45,7 +45,6 @@ public abstract class ItemRendererMixin implements SynchronousResourceReloader {
 				matrices.translate(0, 0, -0.875);
 				//Modify distance based on pekhui if needed
 				dist /= RenderingUtils.getSizeMultiplier(cpe, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(true));
-//				RenderingUtils.renderChainsBasic(stack, dist, matrices, vertexConsumers, light, overlay);
 				RenderingUtils.renderChainsFancy(stack, dist, matrices, vertexConsumers, light, overlay);
 				matrices.pop();
 			}
@@ -62,7 +61,6 @@ public abstract class ItemRendererMixin implements SynchronousResourceReloader {
 				matrices.translate(0, 0, -0.875);
 				//Modify distance based on pekhui if needed
 				dist /= RenderingUtils.getSizeMultiplier(cpe, MinecraftClient.getInstance().getRenderTickCounter().getTickDelta(true));
-//				RenderingUtils.renderChainsBasic(stack, dist, matrices, vertexConsumers, light, overlay);
 				RenderingUtils.renderChainsFancy(stack, dist, matrices, vertexConsumers, light, overlay);
 				matrices.pop();
 			}

@@ -111,7 +111,7 @@ public class RenderingUtils {
 	public static void renderChainsBasic(ItemStack stack, double distance, MatrixStack matrices, VertexConsumerProvider vcp, int light, int overlay) {
 		matrices.translate(0, -distance-1, 0);
 
-		for (int i=0;i<distance-1; i++) {
+		for (int i=0; i<distance-1 && i < 256; i++) {
 			if (distance - 1 - i < 0.3) {
 				break;
 			}
