@@ -3,17 +3,17 @@ package io.github.moonlight_maya.limits_grapple.item;
 import io.github.moonlight_maya.limits_grapple.GrappleMod;
 import io.github.moonlight_maya.limits_grapple.ServerPlayerVelocityHelper;
 import net.fabricmc.fabric.api.item.v1.FabricItem;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.fluid.FluidState;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemUsage;
 import net.minecraft.item.ToolMaterials;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvents;
@@ -23,7 +23,11 @@ import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.Unit;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
@@ -127,14 +131,35 @@ public class GrappleItem extends Item implements FabricItem {
 	public static BlockHitResult raycast(PlayerEntity user, ItemStack grappleItem) {
 		//Get raycast range
 		double range = RANGE_BASE + RANGE_PER_LEVEL * EnchantmentHelper.getLevel(user.getRegistryManager().get(RegistryKeys.ENCHANTMENT).getEntry(GrappleMod.RANGE_ENCHANTMENT).orElseThrow(), grappleItem);
-		range = Math.min(range, 108); //cap it at the max value, so /give'd grapples don't try to raycast absurd distance.
+		//range = Math.min(range, 108); //cap it at the max value, so /give'd grapples don't try to raycast absurd distance.
 
 		//Perform raycast
 		Vec3d startVec = user.getEyePos();
 		Vec3d diffVec = user.getRotationVector().multiply(range);
 		Vec3d endVec = startVec.add(diffVec);
-		return user.getWorld().raycast(new RaycastContext(startVec, endVec, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, user));
-	}
+		World world = user.getWorld();
+		return BlockView.raycast(startVec, endVec, new RaycastContext(startVec, endVec, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, user), (innerContext, pos) -> {
+			// Reimplement raycast but avoid forcing chunk load for absurd distances
+			if (!world.isChunkLoaded(pos)) {
+				Vec3d vec3d = innerContext.getStart().subtract(innerContext.getEnd());
+				return BlockHitResult.createMissed(innerContext.getEnd(), Direction.getFacing(vec3d.x, vec3d.y, vec3d.z), BlockPos.ofFloored(innerContext.getEnd()));
+			}
+
+			BlockState blockState = world.getBlockState(pos);
+			FluidState fluidState = world.getFluidState(pos);
+			Vec3d vec3d = innerContext.getStart();
+			Vec3d vec3d2 = innerContext.getEnd();
+			VoxelShape voxelShape = innerContext.getBlockShape(blockState, world, pos);
+			BlockHitResult blockHitResult = world.raycastBlock(vec3d, vec3d2, pos, voxelShape, blockState);
+			VoxelShape voxelShape2 = innerContext.getFluidShape(fluidState, world, pos);
+			BlockHitResult blockHitResult2 = voxelShape2.raycast(vec3d, vec3d2, pos);
+			double d = blockHitResult == null ? Double.MAX_VALUE : innerContext.getStart().squaredDistanceTo(blockHitResult.getPos());
+			double e = blockHitResult2 == null ? Double.MAX_VALUE : innerContext.getStart().squaredDistanceTo(blockHitResult2.getPos());
+			return d <= e ? blockHitResult : blockHitResult2;
+		}, (innerContext) -> {
+			Vec3d vec3d = innerContext.getStart().subtract(innerContext.getEnd());
+			return BlockHitResult.createMissed(innerContext.getEnd(), Direction.getFacing(vec3d.x, vec3d.y, vec3d.z), BlockPos.ofFloored(innerContext.getEnd()));
+		});	}
 
 	public static final double RANGE_BASE = 48.0;
 	public static final double RANGE_PER_LEVEL = 12.0;

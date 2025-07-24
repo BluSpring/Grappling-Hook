@@ -6,6 +6,7 @@ classes/
 
 # Quilt Loom
 run/
+run_server/
 
 # Eclipse
 *.launch
