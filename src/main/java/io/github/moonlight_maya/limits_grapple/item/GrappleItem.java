@@ -25,6 +25,7 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
@@ -54,6 +55,9 @@ public class GrappleItem extends Item implements FabricItem {
 		}
 		if (world.isClient && user instanceof ClientPlayerEntity cpe)
 			affectClientPlayer(cpe, stack, ticksElapsed);
+		else if (!world.isClient && user instanceof ServerPlayerEntity spe) { // set fall distance to be half of the player's velocity
+			spe.fallDistance = MathHelper.abs((float) spe.getVelocity().y) / 2f;
+		}
 
 		//Decide if we want to break the grapple
 		Vec3d diff = stack.get(GrappleMod.ANCHOR).subtract(user.getEyePos());
